@@ -196,10 +196,19 @@ class Project extends lmbObject
     if($cmd = $this->_getFilled('sync_cmd'))
       return $cmd;
 
-    $rsync_opts = $this->_getRaw('rsync_opts');
+    if(!$this->get('type') || ($this->get('type') && $this->get('type') == 'rsync'))
+    {
+      $rsync_opts = $this->_getRaw('rsync_opts');
 
-    return  SYNCMAN_RSYNC_BIN . ' -CvzOrlt --include=tags --include=core -e "' . SYNCMAN_SSH_BIN . ' -i ' . $this->getKey() . '" ' . $rsync_opts . ' ' .
-      $this->getLocalDir(). '/ ' . $this->getRemoteUserWithHost() . ':' . $this->getRemoteDir();
+      return  SYNCMAN_RSYNC_BIN . ' -CvzOrlt --include=tags --include=core -e "' . SYNCMAN_SSH_BIN . ' -i ' . $this->getKey() . '" ' . $rsync_opts . ' ' .
+        $this->getLocalDir(). '/ ' . $this->getRemoteUserWithHost() . ':' . $this->getRemoteDir();
+    }
+    elseif($this->get('type') == 'lftp')
+    {
+      $opts = $this->_getRaw('opts');
+      $port = isset($this->port)? " -p {$this->getPort()} ": '';
+      return "lftp $port -e \"mirror -Rn $opts {$this->getLocalDir()}  {$this->getRemoteDir()}; bye;\" -u {$this->getUser()},{$this->getPassword()} {$this->getHost()}";
+    }
   }
 
   function needPresync()
@@ -537,23 +546,43 @@ class Project extends lmbObject
 
   protected function _fillTemplate($str)
   {
-    return str_replace(array('%wc%',
-                             '%host%',
-                             '%user%',
-                             '%local_dir%',
-                             '%remote_dir%',
-                             '%key%',
-                             '%settings_dir%',
-                             ),
-                       array($this->getWc(),
-                             $this->getHost(),
-                             $this->getUser(),
-                             $this->getLocalDir(),
-                             $this->getRemoteDir(),
-                             $this->getKey(),
-                             $this->getSettingsDir(),
-                             ),
-                       $str);
+    $search = array(
+      '%wc%',
+      '%host%',
+      '%user%',
+      '%local_dir%',
+      '%remote_dir%',
+      '%settings_dir%',
+    );
+
+    $replace = array(
+      $this->getWc(),
+      $this->getHost(),
+      $this->getUser(),
+      $this->getLocalDir(),
+      $this->getRemoteDir(),
+      $this->getSettingsDir(),
+     );
+
+    if(isset($this->key))
+    {
+      $search[] = '%key%';
+      $replace[] = $this->getKey();
+    }
+
+    if(isset($this->password))
+    {
+      $search[] = '%password%';
+      $replace[] = $this->getPassword();
+    }
+
+    if(isset($this->port))
+    {
+      $search[] = '%port%';
+      $replace[] = $this->getPort();
+    }
+
+    return str_replace($search, $replace, $str);
   }
 
   protected function _removeOldLog()
